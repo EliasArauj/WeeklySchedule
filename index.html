@@ -4665,7 +4665,7 @@
         <div class="export-action-icon purple">☁</div>
         <div class="export-action-info">
           <div class="export-action-name">Salvar na Nuvem</div>
-          <div class="export-action-desc">Gera um ID para compartilhar</div>
+          <div class="export-action-desc">Gera um ID — sem cadastro</div>
         </div>
       </button>
 
@@ -4673,7 +4673,7 @@
         <div class="export-action-icon blue">⬇</div>
         <div class="export-action-info">
           <div class="export-action-name">Carregar da Nuvem</div>
-          <div class="export-action-desc">Restaura pelo ID informado</div>
+          <div class="export-action-desc">Cole o ID em qualquer dispositivo</div>
         </div>
       </button>
 
@@ -4778,48 +4778,64 @@
       });
     };
 
-    // ── Salvar na nuvem (JSONBin.io) ──
+    // ── Salvar na nuvem (jsonblob.com — sem API key) ──
     window.cloudSave = function() {
       setStatus('loading','Salvando...');
       var data = collectAllData();
       var existingId = cloudIdInput.value.trim();
-      var url = existingId
-        ? 'https://api.jsonbin.io/v3/b/' + existingId
-        : 'https://api.jsonbin.io/v3/b';
-      var method = existingId ? 'PUT' : 'POST';
-      var headers = { 'Content-Type': 'application/json', 'X-Bin-Private': 'false' };
-      if (!existingId) headers['X-Bin-Name'] = 'Escala-' + Date.now();
 
-      fetch(url, { method: method, headers: headers, body: JSON.stringify(data) })
-        .then(function(r){ return r.json(); })
-        .then(function(res){
-          var id = (res.metadata && res.metadata.id) || existingId;
-          if (!id) throw new Error('Sem ID');
-          localStorage.setItem(CLOUD_BIN_KEY, id);
-          cloudIdInput.value = id;
-          setStatus('ok','Salvo · ID: ' + id.slice(-8));
+      if (existingId) {
+        // Atualiza blob existente (PUT)
+        fetch('https://jsonblob.com/api/jsonBlob/' + existingId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(data)
+        })
+        .then(function(r) {
+          if (!r.ok) throw new Error('Falha ao atualizar (status ' + r.status + ')');
+          setStatus('ok', 'Atualizado · ID: ' + existingId.slice(-8));
           panel.classList.remove('open');
         })
-        .catch(function(e){
-          setStatus('err','Erro ao salvar: ' + e.message);
-        });
+        .catch(function(e) { setStatus('err', 'Erro: ' + e.message); });
+
+      } else {
+        // Cria novo blob (POST) — ID retorna no header Location
+        fetch('https://jsonblob.com/api/jsonBlob', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(data)
+        })
+        .then(function(r) {
+          if (!r.ok) throw new Error('Falha ao criar (status ' + r.status + ')');
+          var location = r.headers.get('Location') || '';
+          var id = location.split('/').pop();
+          if (!id) throw new Error('ID não recebido');
+          localStorage.setItem(CLOUD_BIN_KEY, id);
+          cloudIdInput.value = id;
+          setStatus('ok', 'Salvo · ID: ' + id.slice(-8));
+          panel.classList.remove('open');
+        })
+        .catch(function(e) { setStatus('err', 'Erro: ' + e.message); });
+      }
     };
 
     // ── Carregar da nuvem ──
     window.cloudLoad = function() {
       var id = cloudIdInput.value.trim();
-      if (!id) { setStatus('err','Informe um ID primeiro'); return; }
-      setStatus('loading','Carregando...');
-      fetch('https://api.jsonbin.io/v3/b/' + id + '/latest')
-        .then(function(r){ return r.json(); })
-        .then(function(res){
-          if (!res.record) throw new Error('Dados não encontrados');
-          localStorage.setItem(CLOUD_BIN_KEY, id);
-          restoreAllData(res.record);
-        })
-        .catch(function(e){
-          setStatus('err','Erro: ' + e.message);
-        });
+      if (!id) { setStatus('err', 'Informe um ID primeiro'); return; }
+      setStatus('loading', 'Carregando...');
+      fetch('https://jsonblob.com/api/jsonBlob/' + id, {
+        headers: { 'Accept': 'application/json' }
+      })
+      .then(function(r) {
+        if (!r.ok) throw new Error('ID não encontrado (status ' + r.status + ')');
+        return r.json();
+      })
+      .then(function(data) {
+        localStorage.setItem(CLOUD_BIN_KEY, id);
+        restoreAllData(data);
+      })
+      .catch(function(e) { setStatus('err', 'Erro: ' + e.message); });
     };
 
     // ── Exportar JSON ──
