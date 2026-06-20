@@ -4648,7 +4648,14 @@
 
       <div class="sync-status" id="sync-status">
         <div class="sync-dot" id="sync-dot"></div>
-        <span id="sync-status-text">Verificando...</span>
+        <span id="sync-status-text">Cole seu token abaixo</span>
+      </div>
+
+      <div class="cloud-id-row">
+        <input class="cloud-id-input" id="gist-token-input"
+          type="password"
+          placeholder="Token do GitHub (ghp_...)" />
+        <button class="cloud-id-copy" onclick="salvarToken()">✓</button>
       </div>
 
       <button class="export-action" onclick="gistSave()">
@@ -4734,7 +4741,7 @@
     }
 
     // ══ GITHUB GIST SYNC ══
-    var GIST_TOKEN = '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';
+    var GIST_TOKEN = localStorage.getItem('escala-gist-token') || '';
     var GIST_FILE  = 'escala-renascer.json';
     var GIST_ID_KEY = 'escala-gist-id';
     var gistId = localStorage.getItem(GIST_ID_KEY) || '';
@@ -4755,7 +4762,31 @@
       };
     }
 
+    // Carrega token salvo no input ao abrir
+    (function(){
+      var inp = document.getElementById('gist-token-input');
+      if (inp) {
+        var t = localStorage.getItem('escala-gist-token') || '';
+        inp.value = t ? '••••••••••••••••' : '';
+      }
+    })();
+
+    window.salvarToken = function() {
+      var inp = document.getElementById('gist-token-input');
+      var val = inp ? inp.value.trim() : '';
+      if (!val || val.startsWith('•')) { setStatus('', 'Token não alterado'); return; }
+      if (!val.startsWith('ghp_') && !val.startsWith('github_pat_')) {
+        setStatus('err', 'Token inválido'); return;
+      }
+      localStorage.setItem('escala-gist-token', val);
+      GIST_TOKEN = val;
+      inp.value = '••••••••••••••••';
+      setStatus('ok', 'Token salvo!');
+    };
+
     window.gistSave = function() {
+      GIST_TOKEN = localStorage.getItem('escala-gist-token') || '';
+      if (!GIST_TOKEN) { setStatus('err', 'Cole seu token primeiro'); return; }
       panel.classList.remove('open');
       if (typeof saveCurrentPageData === 'function') saveCurrentPageData();
       if (typeof salvar === 'function') salvar();
@@ -4796,6 +4827,8 @@
     };
 
     window.gistLoad = function() {
+      GIST_TOKEN = localStorage.getItem('escala-gist-token') || '';
+      if (!GIST_TOKEN) { setStatus('err', 'Cole seu token primeiro'); return; }
       panel.classList.remove('open');
       if (!gistId) { setStatus('err', 'Salve primeiro em um PC'); return; }
       setStatus('loading', 'Carregando...');
