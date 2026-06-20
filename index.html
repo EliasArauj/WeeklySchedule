@@ -4644,57 +4644,30 @@
       ☁
     </button>
     <div class="export-panel" id="export-panel">
-      <div class="export-panel-title">Exportar &amp; Sincronizar</div>
+      <div class="export-panel-title">Sincronizar &amp; Imprimir</div>
 
-      <!-- Status nuvem -->
       <div class="sync-status" id="sync-status">
         <div class="sync-dot" id="sync-dot"></div>
-        <span id="sync-status-text">Não sincronizado</span>
+        <span id="sync-status-text">Verificando...</span>
       </div>
 
-      <!-- Cloud ID row -->
-      <div class="cloud-id-row">
-        <input class="cloud-id-input" id="cloud-id-input" placeholder="Cole seu ID da nuvem..." />
-        <button class="cloud-id-copy" id="cloud-id-copy-btn" onclick="copyCloudId()">Copiar</button>
-      </div>
-
-      <div class="export-divider"></div>
-
-      <!-- Ações -->
-      <button class="export-action" onclick="cloudSave()">
+      <button class="export-action" onclick="gistSave()">
         <div class="export-action-icon purple">☁</div>
         <div class="export-action-info">
-          <div class="export-action-name">Salvar na Nuvem</div>
-          <div class="export-action-desc">Gera um ID — sem cadastro</div>
+          <div class="export-action-name">Salvar na nuvem</div>
+          <div class="export-action-desc">Salva e sincroniza todos os PCs</div>
         </div>
       </button>
 
-      <button class="export-action" onclick="cloudLoad()">
+      <button class="export-action" onclick="gistLoad()">
         <div class="export-action-icon blue">⬇</div>
         <div class="export-action-info">
-          <div class="export-action-name">Carregar da Nuvem</div>
-          <div class="export-action-desc">Cole o ID em qualquer dispositivo</div>
+          <div class="export-action-name">Carregar da nuvem</div>
+          <div class="export-action-desc">Puxa a versão mais recente</div>
         </div>
       </button>
 
       <div class="export-divider"></div>
-
-      <button class="export-action" onclick="exportJSON()">
-        <div class="export-action-icon green">📄</div>
-        <div class="export-action-info">
-          <div class="export-action-name">Exportar JSON</div>
-          <div class="export-action-desc">Baixar backup local</div>
-        </div>
-      </button>
-
-      <button class="export-action" onclick="document.getElementById('import-file').click()">
-        <div class="export-action-icon amber">📂</div>
-        <div class="export-action-info">
-          <div class="export-action-name">Importar JSON</div>
-          <div class="export-action-desc">Restaurar de um backup</div>
-        </div>
-      </button>
-      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
 
       <button class="export-action" onclick="exportPrint()">
         <div class="export-action-icon rose">🖨</div>
@@ -4721,35 +4694,33 @@
 
     // ── Coleta todos os dados do localStorage ──
     function collectAllData() {
+      // Salva página atual antes de exportar
+      if (typeof saveCurrentPageData === 'function') saveCurrentPageData();
       var data = {};
-      var keys = [
-        'escala-semanal-conteudo',
-        'escala-layout',
-        'escala-fx',
-        'escala-page-bg',
-        'escala-card-opacity',
-        'escala-bg-layer-opacity',
-        'escala-bg-video',
-        'escala-page-current',
-      ];
-      // Também pega as 3 páginas
-      for (var i = 0; i < 3; i++) {
-        keys.push('escala-page-' + i);
+      // Varre TODO o localStorage e pega só chaves do sistema escala-*
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.startsWith('escala-')) {
+          data[k] = localStorage.getItem(k);
+        }
       }
-      keys.forEach(function(k){
-        var v = localStorage.getItem(k);
-        if (v !== null) data[k] = v;
-      });
-      data['_version'] = '1.0';
+      data['_version'] = '2.0';
       data['_exported'] = new Date().toISOString();
       return data;
     }
 
     // ── Restaura dados no localStorage ──
     function restoreAllData(data) {
+      // Limpa chaves escala-* antigas antes de restaurar
+      var toRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.startsWith('escala-')) toRemove.push(k);
+      }
+      toRemove.forEach(function(k){ localStorage.removeItem(k); });
+      // Restaura novos dados
       Object.keys(data).forEach(function(k){
-        if (k.startsWith('_')) return;
-        localStorage.setItem(k, data[k]);
+        if (!k.startsWith('_')) localStorage.setItem(k, data[k]);
       });
       location.reload();
     }
@@ -4762,110 +4733,99 @@
       txt.textContent = text;
     }
 
-    // ── Cloud ID ──
-    var CLOUD_BIN_KEY = 'escala-cloud-bin-id';
-    var savedBinId = localStorage.getItem(CLOUD_BIN_KEY) || '';
-    var cloudIdInput = document.getElementById('cloud-id-input');
-    cloudIdInput.value = savedBinId;
-    if (savedBinId) setStatus('ok', 'ID: ' + savedBinId.slice(-8));
+    // ══ GITHUB GIST SYNC ══
+    var GIST_TOKEN = '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';
+    var GIST_FILE  = 'escala-renascer.json';
+    var GIST_ID_KEY = 'escala-gist-id';
+    var gistId = localStorage.getItem(GIST_ID_KEY) || '';
 
-    window.copyCloudId = function() {
-      var val = cloudIdInput.value.trim();
-      if (!val) { setStatus('err','Nenhum ID para copiar'); return; }
-      navigator.clipboard.writeText(val).then(function(){
-        var b = document.getElementById('cloud-id-copy-btn');
-        b.textContent = '✓ Copiado'; setTimeout(function(){ b.textContent='Copiar'; },2000);
-      });
-    };
+    function setStatus(state, text) {
+      var dot = document.getElementById('sync-dot');
+      var txt = document.getElementById('sync-status-text');
+      if (!dot || !txt) return;
+      dot.className = 'sync-dot ' + state;
+      txt.textContent = text;
+    }
 
-    // ── Salvar na nuvem (jsonblob.com — sem API key) ──
-    window.cloudSave = function() {
-      setStatus('loading','Salvando...');
+    function gistHeaders() {
+      return {
+        'Authorization': 'token ' + GIST_TOKEN,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github.v3+json'
+      };
+    }
+
+    window.gistSave = function() {
+      panel.classList.remove('open');
+      if (typeof saveCurrentPageData === 'function') saveCurrentPageData();
+      if (typeof salvar === 'function') salvar();
+      setStatus('loading', 'Salvando...');
       var data = collectAllData();
-      var existingId = cloudIdInput.value.trim();
+      var body = JSON.stringify({
+        description: 'Escala Renascer AD - ' + new Date().toLocaleString('pt-BR'),
+        public: false,
+        files: { 'escala-renascer.json': { content: JSON.stringify(data, null, 2) } }
+      });
 
-      if (existingId) {
-        // Atualiza blob existente (PUT)
-        fetch('https://jsonblob.com/api/jsonBlob/' + existingId, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(data)
+      if (gistId) {
+        // Atualiza gist existente
+        fetch('https://api.github.com/gists/' + gistId, {
+          method: 'PATCH', headers: gistHeaders(), body: body
         })
-        .then(function(r) {
-          if (!r.ok) throw new Error('Falha ao atualizar (status ' + r.status + ')');
-          setStatus('ok', 'Atualizado · ID: ' + existingId.slice(-8));
-          panel.classList.remove('open');
+        .then(function(r){ return r.json(); })
+        .then(function(res){
+          if (res.id) { setStatus('ok', '✓ Salvo! ' + new Date().toLocaleTimeString('pt-BR')); }
+          else { throw new Error(res.message || 'Erro'); }
         })
-        .catch(function(e) { setStatus('err', 'Erro: ' + e.message); });
-
+        .catch(function(e){ setStatus('err', 'Erro: ' + e.message); });
       } else {
-        // Cria novo blob (POST) — ID retorna no header Location
-        fetch('https://jsonblob.com/api/jsonBlob', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(data)
+        // Cria gist novo
+        fetch('https://api.github.com/gists', {
+          method: 'POST', headers: gistHeaders(), body: body
         })
-        .then(function(r) {
-          if (!r.ok) throw new Error('Falha ao criar (status ' + r.status + ')');
-          var location = r.headers.get('Location') || '';
-          var id = location.split('/').pop();
-          if (!id) throw new Error('ID não recebido');
-          localStorage.setItem(CLOUD_BIN_KEY, id);
-          cloudIdInput.value = id;
-          setStatus('ok', 'Salvo · ID: ' + id.slice(-8));
-          panel.classList.remove('open');
+        .then(function(r){ return r.json(); })
+        .then(function(res){
+          if (res.id) {
+            gistId = res.id;
+            localStorage.setItem(GIST_ID_KEY, gistId);
+            setStatus('ok', '✓ Salvo! ' + new Date().toLocaleTimeString('pt-BR'));
+          } else { throw new Error(res.message || 'Erro'); }
         })
-        .catch(function(e) { setStatus('err', 'Erro: ' + e.message); });
+        .catch(function(e){ setStatus('err', 'Erro: ' + e.message); });
       }
     };
 
-    // ── Carregar da nuvem ──
-    window.cloudLoad = function() {
-      var id = cloudIdInput.value.trim();
-      if (!id) { setStatus('err', 'Informe um ID primeiro'); return; }
-      setStatus('loading', 'Carregando...');
-      fetch('https://jsonblob.com/api/jsonBlob/' + id, {
-        headers: { 'Accept': 'application/json' }
-      })
-      .then(function(r) {
-        if (!r.ok) throw new Error('ID não encontrado (status ' + r.status + ')');
-        return r.json();
-      })
-      .then(function(data) {
-        localStorage.setItem(CLOUD_BIN_KEY, id);
-        restoreAllData(data);
-      })
-      .catch(function(e) { setStatus('err', 'Erro: ' + e.message); });
-    };
-
-    // ── Exportar JSON ──
-    window.exportJSON = function() {
-      var data = collectAllData();
-      var blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'escala-' + new Date().toISOString().slice(0,10) + '.json';
-      a.click();
+    window.gistLoad = function() {
       panel.classList.remove('open');
-    };
-
-    // ── Importar JSON ──
-    window.importJSON = function(e) {
-      var file = e.target.files[0];
-      if (!file) return;
-      var reader = new FileReader();
-      reader.onload = function(ev) {
-        try {
-          var data = JSON.parse(ev.target.result);
-          restoreAllData(data);
-        } catch(err) {
-          setStatus('err','Arquivo inválido');
+      if (!gistId) { setStatus('err', 'Salve primeiro em um PC'); return; }
+      setStatus('loading', 'Carregando...');
+      fetch('https://api.github.com/gists/' + gistId, { headers: gistHeaders() })
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        var content = res.files && res.files[GIST_FILE] && res.files[GIST_FILE].content;
+        if (!content) throw new Error('Dados não encontrados');
+        var data = JSON.parse(content);
+        var toRemove = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i); if (k && k.startsWith('escala-')) toRemove.push(k);
         }
-      };
-      reader.readAsText(file);
+        toRemove.forEach(function(k){ localStorage.removeItem(k); });
+        Object.keys(data).forEach(function(k){ if (!k.startsWith('_')) localStorage.setItem(k, data[k]); });
+        location.reload();
+      })
+      .catch(function(e){ setStatus('err', 'Erro: ' + e.message); });
     };
 
-    // ── Imprimir ──
+    // Verifica status ao abrir o painel
+    document.getElementById('export-main-btn').addEventListener('click', function(){
+      if (gistId) {
+        setStatus('ok', 'Pronto · ID: ...' + gistId.slice(-6));
+      } else {
+        setStatus('', 'Nunca sincronizado');
+      }
+    });
+
+        // ── Imprimir ──
     window.exportPrint = function() {
       panel.classList.remove('open');
       setTimeout(function(){ window.print(); }, 300);
