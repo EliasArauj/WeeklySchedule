@@ -2363,6 +2363,14 @@
 
 
 
+
+
+
+
+
+
+
+
     /* ══════════════════════════════════════════════════════
        EXPORT / SYNC BUTTON
     ══════════════════════════════════════════════════════ */
@@ -2850,6 +2858,16 @@
       const dot = row.querySelector('.color-dot');
       const wrap = row.querySelector('.row-color-wrap');
       const dropdown = row.querySelector('.row-color-dropdown');
+
+      // Escuta evento de troca de página para reaplicar cor
+      document.addEventListener('escala-apply-color', function(e) {
+        if (e.detail.rowIndex === rowIndex) {
+          currentIndex = e.detail.colorIdx;
+          if (currentIndex < 0 || currentIndex >= rowColors.length) currentIndex = 0;
+          applyRowColor(currentIndex);
+          renderRowColorDropdown();
+        }
+      });
 
       // Determinar índice atual: cor salva (índice numérico) ou classe d0-d6 antiga
       const savedColorKey = 'escala-color-' + rowIndex;
@@ -4268,7 +4286,6 @@
         </div>
       </div>
 
-
     </div>
 
     <button class="layout-switcher-btn" id="layout-switcher-btn" title="Trocar layout">
@@ -4525,6 +4542,11 @@
         var el = document.getElementById(id);
         if (el) p.rows[i] = el.innerHTML;
       });
+      // Salva cores das linhas
+      p.colors = [];
+      document.querySelectorAll('.row').forEach(function(row, i) {
+        p.colors[i] = localStorage.getItem('escala-color-' + i) || '0';
+      });
       // Save to localStorage
       try { localStorage.setItem(PAGE_KEY + '-' + currentPage, JSON.stringify(p)); } catch(e){}
     }
@@ -4551,6 +4573,23 @@
       dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
       document.getElementById('page-prev').disabled = idx === 0;
       document.getElementById('page-next').disabled = idx === pages.length - 1;
+      // Restaura cores das linhas
+      if (p.colors) {
+        p.colors.forEach(function(colorIdx, i) {
+          localStorage.setItem('escala-color-' + i, colorIdx);
+        });
+      } else {
+        // Sem cores salvas — reseta para padrão (0)
+        for (var i = 0; i < 7; i++) localStorage.removeItem('escala-color-' + i);
+      }
+      // Aplica visualmente as cores após o DOM carregar
+      setTimeout(function() {
+        document.querySelectorAll('.row').forEach(function(row, i) {
+          var colorIdx = parseInt(localStorage.getItem('escala-color-' + i) || '0', 10);
+          var evt = new CustomEvent('escala-apply-color', { detail: { rowIndex: i, colorIdx: colorIdx } });
+          document.dispatchEvent(evt);
+        });
+      }, 50);
     }
 
     var FX_KEY = 'escala-fx';
@@ -4628,6 +4667,27 @@
       if (e.target && e.target.contentEditable === 'true') {
         setTimeout(saveCurrentPageData, 300);
       }
+    });
+
+    // Colar sempre como texto puro — remove cor/fonte do conteúdo colado
+    document.addEventListener('paste', function(e) {
+      var target = e.target;
+      if (!target || target.contentEditable !== 'true') return;
+      e.preventDefault();
+      var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      // Insere como texto simples na posição do cursor
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return;
+      sel.deleteFromDocument();
+      var range = sel.getRangeAt(0);
+      var textNode = document.createTextNode(text);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.setEndAfter(textNode);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      // Dispara input para salvar
+      target.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
     // FX Picker
