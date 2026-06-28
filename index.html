@@ -966,7 +966,7 @@
       justify-content: center;
       flex-shrink: 0;
       font-weight: 800;
-      font-size: 16px;
+      font-size: 28px;
       letter-spacing: .05em;
       color: #fff;
       border-radius: 17px 0 0 17px;
@@ -1535,8 +1535,8 @@
     }
 
     .day-num {
-      font-size: 10px;
-      font-weight: 600;
+      font-size: 14px;
+      font-weight: 700;
       opacity: .8;
       letter-spacing: .05em;
       margin-top: 1px;
@@ -3195,8 +3195,8 @@
               ctx.beginPath();
               ctx.moveTo(abs[i].ax, abs[i].ay);
               ctx.lineTo(abs[j].ax, abs[j].ay);
-              ctx.strokeStyle = `rgba(148,163,184,${0.12 * (1 - dist/90)})`;
-              ctx.lineWidth = 0.6;
+              ctx.strokeStyle = `rgba(30,41,59,${0.85 * (1 - dist/90)})`;
+              ctx.lineWidth = 2.0;
               ctx.stroke();
             }
           }
@@ -3210,7 +3210,7 @@
           ctx.beginPath();
           ctx.arc(ax, ay, size, 0, Math.PI * 2);
           ctx.fillStyle = p.color;
-          ctx.globalAlpha = p.alpha * (0.85 + Math.sin(p.pulse) * 0.15);
+          ctx.globalAlpha = p.alpha;
           ctx.fill();
           ctx.globalAlpha = 1;
 
@@ -3371,13 +3371,14 @@
     const canvas = document.getElementById(canvasId);
     const ctx = canvas.getContext('2d');
 
-    const particles = Array.from({ length: 70 }, () => ({
+    const _isBg = canvasId === 'bg-canvas';
+    const particles = Array.from({ length: _isBg ? 100 : 70 }, () => ({
       x: Math.random(),
       y: Math.random(),
-      r: Math.random() * 1.6 + 0.5,
+      r: _isBg ? Math.random() * 5 + 3 : Math.random() * 1.6 + 0.5,
       vx: (Math.random() - 0.5) * 0.0007,
       vy: (Math.random() - 0.5) * 0.0007,
-      alpha: Math.random() * 0.4 + 0.4,
+      alpha: _isBg ? Math.random() * 0.2 + 0.85 : Math.random() * 0.4 + 0.4,
       pulse: Math.random() * Math.PI * 2,
     }));
 
@@ -3504,7 +3505,7 @@
       new ResizeObserver(resizeCanvas).observe(canvas.parentElement);
     }
 
-    const GRAY = canvasId === 'header-canvas-fx' ? '255,255,255' : '71,85,105';
+    const GRAY = canvasId === 'header-canvas-fx' ? '255,255,255' : (_isBg ? '15,23,42' : '71,85,105');
     let waveT = 0;
 
     const effects = {
@@ -3546,8 +3547,8 @@
               ctx.beginPath();
               ctx.moveTo(abs[i].ax, abs[i].ay);
               ctx.lineTo(abs[j].ax, abs[j].ay);
-              ctx.strokeStyle = `rgba(${GRAY},${0.18 * (1 - dist/110)})`;
-              ctx.lineWidth = 0.7;
+              ctx.strokeStyle = `rgba(${GRAY},${(_isBg ? 0.85 : 0.18) * (1 - dist/110)})`;
+              ctx.lineWidth = _isBg ? 2.0 : 0.7;
               ctx.stroke();
             }
           }
